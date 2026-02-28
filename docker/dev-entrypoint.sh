@@ -29,12 +29,32 @@ if [ ! -f ".env" ]; then
   cp .env.example .env
 fi
 
+# Patch .env file with Docker-specific values
+# Laravel reads .env directly from disk (volume mount), so env vars from
+# docker-compose alone are NOT enough — we must update the file itself.
+echo "→ Patching .env for Docker environment..."
+
+patch_env() {
+  local key="$1"
+  local value="$2"
+  if grep -q "^${key}=" .env; then
+    sed -i "s|^${key}=.*|${key}=${value}|" .env
+  else
+    echo "${key}=${value}" >> .env
+  fi
+}
+
+patch_env "DB_HOST"        "postgres"
+patch_env "DB_PORT"        "5432"
+patch_env "SESSION_DRIVER" "file"
+patch_env "CACHE_DRIVER"   "file"
+patch_env "LOG_CHANNEL"    "stderr"
+
 # Always clear Laravel caches on startup
-# (prevents stale local config e.g. DB_HOST=127.0.0.1 from being used in Docker)
 echo "→ Clearing config/cache..."
-php artisan config:clear 2>/dev/null || true
-php artisan cache:clear 2>/dev/null || true
-php artisan view:clear 2>/dev/null || true
+php artisan config:clear
+php artisan cache:clear
+php artisan view:clear
 
 # Generate APP_KEY if missing
 if ! grep -q '^APP_KEY=base64:' .env; then
