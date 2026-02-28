@@ -22,7 +22,10 @@ services:
       APP_ENV: local
       APP_URL: "http://localhost:8000"
       LOG_CHANNEL: stderr
-      DB_HOST: postgres # Override host to use docker service name
+      DB_HOST: postgres # Override: use docker service name, not 127.0.0.1
+      SESSION_DRIVER: file # Override: avoid database session (uses .env value which points to 127.0.0.1)
+      CACHE_DRIVER: file
+      QUEUE_CONNECTION: sync
 
   postgres:
     image: postgres:16-alpine
