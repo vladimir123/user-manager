@@ -1,0 +1,54 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: user_manager_dev
+    restart: unless-stopped
+    ports:
+      - "8000:8000" # Laravel dev server
+    volumes:
+      - .:/var/www/html # Live code mounting
+      - composer_cache:/root/.composer # Cache composer packages
+      - npm_cache:/root/.npm # Cache npm packages
+    networks:
+      - user_manager_dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      APP_ENV: local
+      APP_URL: "http://localhost:8000"
+      LOG_CHANNEL: stderr
+      DB_HOST: postgres # Override host to use docker service name
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: user_manager_postgres_dev
+    restart: unless-stopped
+    ports:
+      - "5433:5432" # Expose on 5433 to avoid conflict with your existing postgres on 5432
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-user_manager}
+      POSTGRES_USER: ${DB_USERNAME:-laravel}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    networks:
+      - user_manager_dev
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME:-laravel} -d ${DB_DATABASE:-user_manager}" ]
+      interval: 3s
+      timeout: 5s
+      retries: 15
+
+networks:
+  user_manager_dev:
+    driver: bridge
+
+volumes:
+  postgres_dev_data:
+  composer_cache:
+  npm_cache:

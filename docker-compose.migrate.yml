@@ -1,0 +1,21 @@
+services:
+  app:
+    image: php:8.3-fpm-alpine
+    container_name: user_manager_dev
+    working_dir: /var/www/html
+    volumes:
+      - .:/var/www/html
+    command: >
+      sh -c "apk add --no-cache postgresql-dev libzip-dev zip &&
+             docker-php-ext-install pdo pdo_pgsql zip &&
+             php artisan migrate &&
+             php artisan users:import"
+    network_mode: host
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: user_manager
+      DB_USERNAME: postgres
+      DB_PASSWORD: "123"
+      APP_KEY: ${APP_KEY}

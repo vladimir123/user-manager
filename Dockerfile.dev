@@ -1,0 +1,37 @@
+FROM php:8.3-cli-alpine
+
+# Use mlocati/docker-php-extension-installer for fast pre-compiled extensions
+# (no manual compilation needed – much faster than docker-php-ext-install)
+ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
+
+RUN install-php-extensions \
+    pdo_pgsql \
+    pgsql \
+    zip \
+    gd \
+    bcmath \
+    pcntl \
+    opcache \
+    intl
+
+# Install system tools: git, curl, Node.js 20 + npm
+RUN apk add --no-cache \
+    git \
+    curl \
+    bash \
+    unzip \
+    nodejs \
+    npm
+
+# Install Composer 2
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+WORKDIR /var/www/html
+
+# Copy entrypoint
+COPY docker/dev-entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+EXPOSE 8000 5173
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
