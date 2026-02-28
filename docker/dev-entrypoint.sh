@@ -29,8 +29,12 @@ if [ ! -f ".env" ]; then
   cp .env.example .env
 fi
 
-# Override .env with values from docker env vars (if set)
-php artisan config:clear > /dev/null 2>&1 || true
+# Always clear Laravel caches on startup
+# (prevents stale local config e.g. DB_HOST=127.0.0.1 from being used in Docker)
+echo "→ Clearing config/cache..."
+php artisan config:clear 2>/dev/null || true
+php artisan cache:clear 2>/dev/null || true
+php artisan view:clear 2>/dev/null || true
 
 # Generate APP_KEY if missing
 if ! grep -q '^APP_KEY=base64:' .env; then
