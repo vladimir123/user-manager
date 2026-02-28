@@ -87,14 +87,15 @@ echo "✓ PostgreSQL is ready"
 echo "→ Running migrations..."
 php artisan migrate --no-interaction --force
 
-# Build frontend assets
-echo "→ Building frontend assets (Vite)..."
-npm run build
+# Start Vite dev server in the background
+echo "→ Starting Vite dev server for HMR..."
+npm run dev &
 
 echo ""
 echo "============================================"
 echo "  ✅ Setup complete!"
 echo "  App: http://localhost:8000"
+echo "  Vite HMR: listening on 5173"
 echo "  Run import: docker compose -f docker-compose.dev.yml exec app php artisan users:import"
 echo "============================================"
 echo ""

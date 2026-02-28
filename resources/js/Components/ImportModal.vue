@@ -9,7 +9,7 @@
       <v-card-text class="px-6 pb-2">
         <p class="text-medium-emphasis mb-4">
           This will fetch <strong>50 users</strong> from
-          <a href="https://randomuser.me" target="_blank" class="text-accent">randomuser.me</a>
+          <a href="https://randomuser.me/api/0.8" target="_blank" class="text-accent">randomuser.me/api/0.8</a>
           and upsert them into your database. Existing records will be updated, new ones created.
         </p>
 

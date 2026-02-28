@@ -7,6 +7,7 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000" # Laravel dev server
+      - "5173:5173" # Vite dev server (HMR)
     volumes:
       - .:/var/www/html # Live code mounting
       - composer_cache:/root/.composer # Cache composer packages
