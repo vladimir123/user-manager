@@ -44,11 +44,13 @@ patch_env() {
   fi
 }
 
-patch_env "DB_HOST"        "postgres"
-patch_env "DB_PORT"        "5432"
-patch_env "SESSION_DRIVER" "file"
-patch_env "CACHE_DRIVER"   "file"
-patch_env "LOG_CHANNEL"    "stderr"
+patch_env "DB_HOST"          "postgres"
+patch_env "DB_PORT"          "5432"
+patch_env "SESSION_DRIVER"   "file"
+patch_env "CACHE_DRIVER"     "file"
+patch_env "CACHE_STORE"      "file"
+patch_env "QUEUE_CONNECTION" "sync"
+patch_env "LOG_CHANNEL"      "stderr"
 
 # Always clear Laravel caches on startup
 echo "→ Clearing config/cache..."
