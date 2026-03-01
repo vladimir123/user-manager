@@ -44,19 +44,34 @@ patch_env() {
   fi
 }
 
-patch_env "DB_HOST"          "postgres"
-patch_env "DB_PORT"          "5432"
-patch_env "SESSION_DRIVER"   "file"
-patch_env "CACHE_DRIVER"     "file"
-patch_env "CACHE_STORE"      "file"
+patch_env "DB_CONNECTION"   "pgsql"
+patch_env "DB_HOST"         "postgres"
+patch_env "DB_PORT"         "5432"
+patch_env "DB_DATABASE"     "user_manager"
+patch_env "DB_USERNAME"     "postgres"
+patch_env "DB_PASSWORD"     "postgres"
+patch_env "SESSION_DRIVER"  "file"
+patch_env "CACHE_DRIVER"    "file"
+patch_env "CACHE_STORE"     "file"
 patch_env "QUEUE_CONNECTION" "sync"
-patch_env "LOG_CHANNEL"      "stderr"
+patch_env "LOG_CHANNEL"     "stderr"
 
-# Always clear Laravel caches on startup
-echo "→ Clearing config/cache..."
-php artisan config:clear
-php artisan cache:clear
-php artisan view:clear
+# Clear caches using filesystem (safe BEFORE DB is ready — no Laravel boot required)
+echo "→ Clearing caches..."
+rm -f  bootstrap/cache/config.php
+rm -f  bootstrap/cache/routes-v7.php
+rm -f  bootstrap/cache/events.php
+rm -rf storage/framework/cache/data/*
+rm -f  storage/framework/views/*.php
+mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views
+
+# Export patched .env vars into current bash session
+# This ensures getenv() in the PHP postgres-wait check gets correct values
+# even when no .env existed on the host at container start time.
+set -a
+# shellcheck disable=SC1091
+. .env
+set +a
 
 # Generate APP_KEY if missing
 if ! grep -q '^APP_KEY=base64:' .env; then

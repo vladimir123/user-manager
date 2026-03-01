@@ -18,15 +18,22 @@ services:
       postgres:
         condition: service_healthy
     env_file:
-      - .env
+      - path: .env
+        required: false   # Allows fresh clone without .env — entrypoint creates it
     environment:
       APP_ENV: local
       APP_URL: "http://localhost:8000"
       LOG_CHANNEL: stderr
-      DB_HOST: postgres # Override: use docker service name, not 127.0.0.1
-      SESSION_DRIVER: file # Override: avoid database session (uses .env value which points to 127.0.0.1)
+      DB_HOST: postgres          # Override: docker service name instead of host value
+      SESSION_DRIVER: file       # Override: file sessions, no DB dependency
       CACHE_DRIVER: file
+      CACHE_STORE: file
       QUEUE_CONNECTION: sync
+      DB_CONNECTION: pgsql
+      DB_PORT: "5432"
+      DB_DATABASE: ${DB_DATABASE:-user_manager}
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
 
   postgres:
     image: postgres:16-alpine
@@ -36,14 +43,14 @@ services:
       - "5433:5432" # Expose on 5433 to avoid conflict with your existing postgres on 5432
     environment:
       POSTGRES_DB: ${DB_DATABASE:-user_manager}
-      POSTGRES_USER: ${DB_USERNAME:-laravel}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
     networks:
       - user_manager_dev
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME:-laravel} -d ${DB_DATABASE:-user_manager}" ]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_DATABASE:-user_manager}"]
       interval: 3s
       timeout: 5s
       retries: 15
