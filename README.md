@@ -9,80 +9,84 @@ A full-stack Laravel 12 + Vue 3 application to import, store, and manage users f
 | Backend | PHP 8.3, Laravel 12 |
 | Database | PostgreSQL 16 |
 | Frontend | Vue 3 + Inertia.js + Vuetify 3 |
-| Build tool | Vite |
+| Build tool | Vite (HMR in Docker) |
 | Container | Docker + Docker Compose |
 
 ## Features
 
-- 📥 Import 50 users from [randomuser.me API v0.8](https://randomuser.me/api/0.8/?results=50)
+- 📥 Import 50 users from [randomuser.me API v1.4](https://randomuser.me/api/?results=50)
 - 🗄️ Stores data in 3 related tables: `users`, `contacts`, `addresses`
-- ✏️ Full CRUD for users (with contact & address managed in tabbed form)
-- 🔍 Live search + pagination on the users table
-- 🔄 Re-import button in the UI (Import modal)
+- ✏️ Full CRUD (with contact & address in a tabbed form)
+- ☑️ Bulk select & delete users
+- 🔍 Live search + pagination
+- 🔄 Re-import from UI (upserts by email — safe to run multiple times)
 - 🌙 Dark / Light theme toggle
-- 🐳 Docker dev environment with auto-setup
+- 🐳 Docker dev environment with fully automated setup + Vite HMR
 
 ---
 
-## Quick Start
+## Quick Start — Docker (recommended)
 
-### Option A — Docker (recommended, no manual installs)
+### 1. Clone and configure
 
 ```bash
 git clone <repo-url>
 cd user-manager
+cp .env.example .env      # copy the config template
+```
 
+> **Optionally** edit `.env` to change credentials or ports before first launch.
+
+### 2. Start
+
+```bash
 docker compose -f docker-compose.dev.yml up
 ```
 
 On first start the container automatically:
-1. Installs Composer dependencies
-2. Installs npm packages
-3. Generates `APP_KEY` in `.env`
-4. Waits for PostgreSQL to be healthy
-5. Runs `php artisan migrate`
-6. Builds frontend assets (`npm run build`)
-7. Starts `php artisan serve` on **port 8000**
+1. Installs Composer & npm dependencies
+2. Creates `.env` from `.env.example` if it doesn't exist
+3. Patches `.env` with Docker-specific values (`DB_HOST=postgres`, file-based cache/sessions)
+4. Generates `APP_KEY` (skipped if already set)
+5. Waits for PostgreSQL to be ready
+6. Runs `php artisan migrate`
+7. Starts **Vite dev server** (HMR on port 5173)
+8. Starts **Laravel** on port 8000
 
-Open **http://localhost:8000** then import data:
+Open **[http://localhost:8000](http://localhost:8000)**
+
+### 3. Import users
+
+Click **Import** in the top bar, or via CLI:
 
 ```bash
 docker compose -f docker-compose.dev.yml exec app php artisan users:import
 ```
 
-> PostgreSQL in this stack runs on port **5433** to avoid conflicts with any local postgres on 5432.
+---
 
-### Environment Variables in Docker
+## Configuration (`.env`)
 
-`docker-compose.dev.yml` reads variables directly from your `.env` file — no need to duplicate them:
+All Docker settings are driven by a single `.env` file — no separate docker-specific config needed.
 
-```yaml
-env_file:
-  - .env          # All variables from .env are passed into the container
-environment:
-  DB_HOST: postgres   # Only the host is overridden (docker service name instead of 127.0.0.1)
-```
+| Variable | Default | Description |
+|---|---|---|
+| `DB_HOST` | `postgres` | Docker service name — **don't change** |
+| `DB_PORT` | `5432` | Also used as the host-side port for pgAdmin |
+| `DB_DATABASE` | `user_manager` | PostgreSQL database name |
+| `DB_USERNAME` | `postgres` | PostgreSQL user |
+| `DB_PASSWORD` | `postgres` | PostgreSQL password |
 
-The postgres container also uses your `.env` values:
-```yaml
-POSTGRES_DB:       ${DB_DATABASE:-user_manager}
-POSTGRES_USER:     ${DB_USERNAME:-laravel}
-POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
-```
-
-So just edit your `.env` once — Docker picks it up automatically.
+> **pgAdmin / TablePlus:** connect to `localhost:5432` (or whatever `DB_PORT` is set to).
+>
+> If you have a local PostgreSQL already running on port 5432, change `DB_PORT=5433` in `.env` before starting.
 
 ---
 
-### Option B — Local (requires PHP 8.3 + PostgreSQL + Node.js)
+## Local Setup (without Docker)
 
-**Prerequisites:**
-```bash
-# PHP pgsql extension (if not installed)
-sudo apt-get install php8.3-pgsql
-```
+**Requirements:** PHP 8.3 + `pgsql` extension, PostgreSQL, Node.js 18+
 
-**Setup:**
 ```bash
 git clone <repo-url>
 cd user-manager
@@ -91,7 +95,7 @@ composer install
 npm install
 
 cp .env.example .env
-# Edit .env — set DB_CONNECTION=pgsql, DB_HOST, DB_DATABASE, DB_USERNAME, DB_PASSWORD
+# Edit .env: set DB_HOST=127.0.0.1, DB_DATABASE, DB_USERNAME, DB_PASSWORD
 
 php artisan key:generate
 php artisan migrate
@@ -99,32 +103,14 @@ php artisan migrate
 
 **Run (two terminals):**
 ```bash
-# Terminal 1 — Vite dev server
+# Terminal 1
 npm run dev
 
-# Terminal 2 — Laravel dev server
+# Terminal 2
 php artisan serve
 ```
 
-Open **http://localhost:8000**
-
----
-
-## Data Import
-
-### Via Artisan command (CLI)
-```bash
-# Import 50 users (default)
-php artisan users:import
-
-# Import a custom number
-php artisan users:import --count=100
-```
-
-### Via UI
-Click the **Import** button in the top bar → confirm in the modal.
-
-Re-importing is safe — existing users are matched by email and updated, new ones are created.
+Open **[http://localhost:8000](http://localhost:8000)**
 
 ---
 
@@ -132,8 +118,8 @@ Re-importing is safe — existing users are matched by email and updated, new on
 
 ```
 users
-  ├── id, external_id, name, email, password
-  ├── first_name, last_name, username, gender
+  ├── id, external_id (login.uuid from API), email, password
+  ├── name, first_name, last_name, username, gender
   ├── date_of_birth, nationality
   └── picture_large, picture_thumbnail
 
@@ -156,24 +142,22 @@ user-manager/
 ├── app/
 │   ├── Console/Commands/ImportUsersCommand.php   # php artisan users:import
 │   ├── Http/Controllers/
-│   │   ├── UserController.php                    # CRUD
+│   │   ├── UserController.php                    # CRUD + bulk delete
 │   │   └── ImportController.php                  # POST /import
 │   ├── Models/                                   # User, Contact, Address
 │   └── Services/RandomUserService.php            # API fetch + upsert logic
-├── database/migrations/                          # 5 migration files
+├── database/migrations/
 ├── resources/js/
 │   ├── app.js                                    # Vue + Vuetify + Inertia + Ziggy
-│   ├── Layouts/AppLayout.vue                     # Nav drawer + theme toggle
-│   ├── Pages/Users/                              # Index, Create, Edit
+│   ├── Layouts/AppLayout.vue
+│   ├── Pages/Users/                              # Index (with bulk select), Create, Edit
 │   └── Components/ImportModal.vue
 ├── routes/web.php
-├── Dockerfile                                    # Production image (PHP-FPM + Nginx)
-├── Dockerfile.dev                                # Dev image (php artisan serve)
-├── docker-compose.yml                            # Production stack
-├── docker-compose.dev.yml                        # Development stack (auto-setup)
+├── Dockerfile.dev                                # Dev image
+├── docker-compose.dev.yml                        # Dev stack
+├── .env.example                                  # Config template (Docker-ready defaults)
 └── docker/
-    ├── nginx/default.conf
-    └── dev-entrypoint.sh                         # Auto-install + migrate + serve
+    └── dev-entrypoint.sh                         # Auto-setup script
 ```
 
 ---
@@ -181,11 +165,14 @@ user-manager/
 ## Docker Commands
 
 ```bash
-# Start dev environment
+# Start (foreground — shows logs)
 docker compose -f docker-compose.dev.yml up
 
 # Start in background
 docker compose -f docker-compose.dev.yml up -d
+
+# View logs
+docker compose -f docker-compose.dev.yml logs -f app
 
 # Import users
 docker compose -f docker-compose.dev.yml exec app php artisan users:import
@@ -193,9 +180,12 @@ docker compose -f docker-compose.dev.yml exec app php artisan users:import
 # Run any artisan command
 docker compose -f docker-compose.dev.yml exec app php artisan <command>
 
+# Rebuild image (required after changes to Dockerfile.dev or docker/dev-entrypoint.sh)
+docker compose -f docker-compose.dev.yml build app
+
 # Stop
 docker compose -f docker-compose.dev.yml down
 
-# Reset database (destroy volumes)
+# Reset database (destroys all data)
 docker compose -f docker-compose.dev.yml down -v
 ```
