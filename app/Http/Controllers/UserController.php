@@ -122,4 +122,17 @@ class UserController extends Controller
         return redirect()->route('users.index')
             ->with('success', 'User deleted successfully.');
     }
+
+    public function bulkDestroy(Request $request)
+    {
+        $validated = $request->validate([
+            'ids'   => 'required|array|min:1',
+            'ids.*' => 'integer|exists:users,id',
+        ]);
+
+        $count = User::whereIn('id', $validated['ids'])->delete();
+
+        return redirect()->route('users.index')
+            ->with('success', "{$count} user(s) deleted successfully.");
+    }
 }

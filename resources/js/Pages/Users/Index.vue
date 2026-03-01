@@ -7,6 +7,16 @@
         <p class="text-medium-emphasis">Manage imported users from randomuser.me</p>
       </div>
       <v-spacer />
+      <v-btn
+        v-if="selected.length"
+        color="error"
+        prepend-icon="mdi-delete-sweep"
+        variant="tonal"
+        class="mr-3"
+        @click="bulkDeleteDialog = true"
+      >
+        Delete ({{ selected.length }})
+      </v-btn>
       <v-btn color="accent" prepend-icon="mdi-cloud-download" class="mr-3" @click="importModal = true">
         Import
       </v-btn>
@@ -29,7 +39,10 @@
         />
       </v-col>
       <v-col cols="12" md="7" class="d-flex align-center justify-end">
-        <v-chip color="primary" variant="tonal" class="mr-2">
+        <v-chip v-if="selected.length" color="error" variant="tonal" class="mr-2">
+          {{ selected.length }} selected
+        </v-chip>
+        <v-chip color="primary" variant="tonal">
           {{ users.total }} total users
         </v-chip>
       </v-col>
@@ -41,6 +54,8 @@
         :headers="headers"
         :items="users.data"
         item-value="id"
+        v-model="selected"
+        show-select
         no-data-text="No users found."
         hover
       >
@@ -109,7 +124,7 @@
       />
     </div>
 
-    <!-- Delete Confirm Dialog -->
+    <!-- Single Delete Confirm Dialog -->
     <v-dialog v-model="deleteDialog" max-width="420" persistent>
       <v-card rounded="xl">
         <v-card-title class="pa-6">
@@ -124,6 +139,25 @@
           <v-spacer />
           <v-btn variant="tonal" @click="deleteDialog = false">Cancel</v-btn>
           <v-btn color="error" :loading="deleting" @click="doDelete">Delete</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Bulk Delete Confirm Dialog -->
+    <v-dialog v-model="bulkDeleteDialog" max-width="440" persistent>
+      <v-card rounded="xl">
+        <v-card-title class="pa-6">
+          <v-icon color="error" class="mr-2">mdi-delete-sweep</v-icon>
+          Delete {{ selected.length }} user(s)?
+        </v-card-title>
+        <v-card-text class="px-6 pb-4">
+          This will permanently delete <strong>{{ selected.length }}</strong> selected user(s)
+          along with all their contact and address data. This cannot be undone.
+        </v-card-text>
+        <v-card-actions class="pa-6 pt-0">
+          <v-spacer />
+          <v-btn variant="tonal" @click="bulkDeleteDialog = false">Cancel</v-btn>
+          <v-btn color="error" :loading="bulkDeleting" @click="doBulkDelete">Delete All</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -144,11 +178,14 @@ const props = defineProps({
   filters: Object,
 });
 
-const search = ref(props.filters?.search || '');
-const importModal = ref(false);
-const deleteDialog = ref(false);
-const deleteTarget = ref(null);
-const deleting = ref(false);
+const search         = ref(props.filters?.search || '');
+const importModal    = ref(false);
+const deleteDialog   = ref(false);
+const deleteTarget   = ref(null);
+const deleting       = ref(false);
+const selected       = ref([]);          // array of selected user IDs
+const bulkDeleteDialog = ref(false);
+const bulkDeleting   = ref(false);
 
 const headers = [
   { title: 'User', key: 'name', sortable: false, minWidth: '220px' },
@@ -177,6 +214,7 @@ const changePage = (page) => {
   router.get('/users', { search: search.value, page }, { preserveState: true });
 };
 
+// Single delete
 const confirmDelete = (user) => {
   deleteTarget.value = user;
   deleteDialog.value = true;
@@ -189,9 +227,18 @@ const doDelete = () => {
   });
 };
 
+// Bulk delete
+const doBulkDelete = () => {
+  bulkDeleting.value = true;
+  router.delete(route('users.bulk-destroy'), {
+    data: { ids: selected.value },
+    onSuccess: () => { selected.value = []; bulkDeleteDialog.value = false; },
+    onFinish: () => { bulkDeleting.value = false; },
+  });
+};
+
 const formatDate = (dateStr) => {
   if (!dateStr) return '—';
-  // Handle both ISO strings and plain date strings
   const d = new Date(dateStr);
   if (isNaN(d)) return dateStr;
   return d.toISOString().slice(0, 10);
