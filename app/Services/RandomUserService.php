@@ -10,29 +10,44 @@ use Illuminate\Support\Str;
 
 class RandomUserService
 {
-    private const API_URL = 'https://randomuser.me/api/';
+    private const API_V1 = 'https://randomuser.me/api/';
+    private const API_V08 = 'https://randomuser.me/api/0.8/';
 
-    public function fetchAndImport(int $count = 50): array
+    public function fetchAndImport(int $count = 50, string $version = '1.4'): array
     {
-        $response = Http::timeout(30)->get(self::API_URL, [
-            'results' => $count,
-        ]);
+        $url = $version === '0.8' ? self::API_V08 : self::API_V1;
+
+        $response = Http::timeout(30)->get($url, ['results' => $count]);
 
         if ($response->failed()) {
             throw new \RuntimeException('Failed to fetch data from randomuser.me API');
         }
 
-        $results  = $response->json('results', []);
+        $results = $response->json('results', []);
+
+        if (empty($results)) {
+            throw new \RuntimeException(
+                'The randomuser.me API returned no users. The service may be temporarily unavailable. Please try again later.'
+            );
+        }
+
+        return $version === '0.8'
+            ? $this->importV08($results, $response->json('nationality'))
+            : $this->importV14($results);
+    }
+
+    // -------------------------------------------------------------------------
+    // API v1.4 parser
+    // -------------------------------------------------------------------------
+    private function importV14(array $results): array
+    {
         $imported = 0;
         $updated  = 0;
 
         foreach ($results as $data) {
-            // v1.4: external_id = login.uuid (stable unique identifier per user)
             $externalId = $data['login']['uuid'];
+            $isNew      = !User::where('email', $data['email'])->exists();
 
-            $isNew = !User::where('email', $data['email'])->exists();
-
-            // v1.4: dob.date is an ISO-8601 string e.g. "1988-05-31T18:24:05.987Z"
             $dob = isset($data['dob']['date'])
                 ? date('Y-m-d', strtotime($data['dob']['date']))
                 : null;
@@ -59,15 +74,11 @@ class RandomUserService
 
             Contact::updateOrCreate(
                 ['user_id' => $user->id],
-                [
-                    'phone' => $data['phone'] ?? null,
-                    'cell'  => $data['cell']  ?? null,
-                ]
+                ['phone' => $data['phone'] ?? null, 'cell' => $data['cell'] ?? null]
             );
 
             // v1.4: location.street is an object {number: int, name: string}
             $street = $data['location']['street'] ?? [];
-
             Address::updateOrCreate(
                 ['user_id' => $user->id],
                 [
@@ -79,6 +90,74 @@ class RandomUserService
                     'country'       => $data['location']['country'] ?? null,
                     'latitude'      => $data['location']['coordinates']['latitude']  ?? null,
                     'longitude'     => $data['location']['coordinates']['longitude'] ?? null,
+                ]
+            );
+
+            $isNew ? $imported++ : $updated++;
+        }
+
+        return ['imported' => $imported, 'updated' => $updated, 'total' => count($results)];
+    }
+
+    // -------------------------------------------------------------------------
+    // API v0.8 parser
+    // -------------------------------------------------------------------------
+    private function importV08(array $results, ?string $responseNationality): array
+    {
+        $imported = 0;
+        $updated  = 0;
+
+        foreach ($results as $item) {
+            // v0.8: each result is wrapped in a "user" key
+            $data = $item['user'];
+
+            $isNew = !User::where('email', $data['email'])->exists();
+
+            // v0.8: dob is a Unix timestamp integer
+            $dob = isset($data['dob'])
+                ? date('Y-m-d', (int) $data['dob'])
+                : null;
+
+            // v0.8: nationality is at the response root level, not per-user
+            $nationality = $responseNationality ?? null;
+
+            $user = User::updateOrCreate(
+                ['email' => $data['email']],
+                [
+                    'external_id'       => $data['md5'],
+                    'name'              => $data['name']['first'] . ' ' . $data['name']['last'],
+                    'first_name'        => $data['name']['first'],
+                    'last_name'         => $data['name']['last'],
+                    'username'          => $data['username'],
+                    'gender'            => $data['gender'],
+                    'date_of_birth'     => $dob,
+                    'nationality'       => $nationality,
+                    'picture_large'     => $data['picture']['large'] ?? null,
+                    'picture_thumbnail' => $data['picture']['thumbnail'] ?? null,
+                    'password'          => bcrypt(Str::random(16)),
+                ]
+            );
+
+            Contact::updateOrCreate(
+                ['user_id' => $user->id],
+                ['phone' => $data['phone'] ?? null, 'cell' => $data['cell'] ?? null]
+            );
+
+            // v0.8: location.street is a full string like "1234 Street Name"; zip not postcode
+            $street = $data['location']['street'] ?? '';
+            preg_match('/^(\d+)\s+(.+)$/', $street, $parts);
+
+            Address::updateOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'street_number' => $parts[1] ?? null,
+                    'street_name'   => $parts[2] ?? $street ?: null,
+                    'city'          => $data['location']['city']  ?? null,
+                    'state'         => $data['location']['state'] ?? null,
+                    'postcode'      => (string) ($data['location']['zip'] ?? ''),
+                    'country'       => null,  // not available in v0.8
+                    'latitude'      => null,
+                    'longitude'     => null,
                 ]
             );
 
