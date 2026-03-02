@@ -6,15 +6,7 @@
         title="User Manager"
         nav
         class="py-4"
-      >
-        <template #append>
-          <v-btn
-            :icon="rail ? 'mdi-chevron-right' : 'mdi-chevron-left'"
-            variant="text"
-            @click="rail = !rail"
-          />
-        </template>
-      </v-list-item>
+      />
 
       <v-divider />
 
@@ -38,6 +30,13 @@
     </v-navigation-drawer>
 
     <v-app-bar flat color="surface" border="b">
+      <template #prepend>
+        <v-btn
+          :icon="rail ? 'mdi-menu' : 'mdi-chevron-left'"
+          variant="text"
+          @click="rail = !rail"
+        />
+      </template>
       <v-app-bar-title>
         <span class="text-h6 font-weight-bold text-primary">{{ title || $page.props.app_name || 'User Manager' }}</span>
       </v-app-bar-title>
